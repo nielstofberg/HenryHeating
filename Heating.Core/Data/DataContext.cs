@@ -30,11 +30,7 @@ namespace Heating.Core.Data
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-#if DEBUG1
-            optionsBuilder.UseMySQL(Settings.Configuration.GetConnectionString("testdbstring"));
-#else
             optionsBuilder.UseMySQL(Settings.Configuration.GetConnectionString("hhdbstring"));            
-#endif
         }
     }
 }

@@ -77,8 +77,11 @@ namespace Heating.Core
                             sensor.LastUpdated = DateTime.Now;
                             sensor.Reading = val;
                             db.Sensors.Update(sensor);
-
-                            var lastlog = db.InfoLogs.Last(s => s.DeviceId == sensor.ID && s.DeviceType == "Sensor");
+                            InfoLog lastlog = null;
+                            try
+                            {
+                                lastlog = db.InfoLogs.Last(s => s.DeviceId == sensor.ID && s.DeviceType == "Sensor");
+                            } catch { }
                             if (lastlog == null || Math.Abs(float.Parse(lastlog.Value) - sensor.Reading) >= sensor.LogChange)
                             {
                                 db.InfoLogs.Add(new InfoLog(DateTime.Now, sensor.ID, "Sensor", sensor.Name, "receive", sensor.Reading.ToString("0.00"), "SensorCollection"));
