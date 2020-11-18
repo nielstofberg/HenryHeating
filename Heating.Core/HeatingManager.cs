@@ -24,16 +24,16 @@ namespace Heating.Core
         {
             Sensors = new SensorCollection();
             Relays = new RelayCollection();
-            Relays.Load();
-            Sensors.Load();
+            Relays.SubscribeToPubSub();
+            Sensors.SubscribeToPubSub();
             _scheduler = new Scheduler();
             _scheduler.OnScheduledEvent += _scheduler_OnScheduledEvent;
             _scheduler.Run();
         }
 
-        private void _scheduler_OnScheduledEvent(object sender, ScheduledEventArgs e)
+        private async void _scheduler_OnScheduledEvent(object sender, ScheduledEventArgs e)
         {
-            Relays.ToArray().First(r => r.ID == e.RelayId)?.Switch(e.Action);
+            await e.Relay.Switch(e.Action);
         }
     }
 }

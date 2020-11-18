@@ -8,7 +8,7 @@ using System.IO;
 using Heating.Core.Schedule;
 using Microsoft.Extensions.Configuration;
 
-namespace Heating.Data
+namespace Heating.Core.Data
 {
     /// <summary>
     /// Enable EntityFramework datatable access for the application:
@@ -26,10 +26,15 @@ namespace Heating.Data
         public DbSet<Relay> Relays { get; set; }
         public DbSet<Sensor> Sensors { get; set; }
         public DbSet<ScheduledEvent> ScheduledEvents { get; set; }
+        public DbSet<InfoLog> InfoLogs { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseMySQL(Settings.Configuration.GetConnectionString("hhdbstring"));
+#if DEBUG1
+            optionsBuilder.UseMySQL(Settings.Configuration.GetConnectionString("testdbstring"));
+#else
+            optionsBuilder.UseMySQL(Settings.Configuration.GetConnectionString("hhdbstring"));            
+#endif
         }
     }
 }

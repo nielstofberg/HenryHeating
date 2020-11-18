@@ -1,4 +1,6 @@
-﻿using Heating.Data;
+﻿using Heating.Core.Data;
+using Heating.PubSub;
+using MQTTnet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,10 +11,6 @@ namespace Heating.Core
 {
     public class RelayCollection
     {
-        private static int _relayIds = 1;
-
-        private List<Relay> relays = new List<Relay>();
-
         /// <summary>
         /// Constructor
         /// </summary>
@@ -25,111 +23,38 @@ namespace Heating.Core
         }
 
         /// <summary>
-        /// Retreved relays stored in the database.
+        /// Subscribe to all MqttToppics
         /// </summary>
-        public void Load()
+        public void SubscribeToPubSub()
         {
-            relays.Clear();
-            using (var db = new DataContext())
-            {
-                try
-                {
-                    relays = db.Relays.ToList();
-                }
-                catch (Exception ex)
-                { }
-            }
-            foreach (var r in relays)
-            {
-                r.Subscribe();
-            }
-        }
-
-        public Relay[] ToArray()
-        {
-            return relays.ToArray();
+            MyMqttServer.UseMessageReceivedHandler(Handler, "");
         }
 
         /// <summary>
-        /// Add a relay to the collection.
-        /// Creates a new relay with the given name and topic.
+        /// Handle Mqtt Update
         /// </summary>
-        /// <param name="name"></param>
-        /// <param name="topic"></param>
+        /// <param name="arg"></param>
         /// <returns></returns>
-        public async Task<Relay> AddRelayAsync(string name, string topic)
+        private int Handler(MqttApplicationMessageReceivedEventArgs arg)
         {
-            Relay newRelay = new Relay(topic);
-            newRelay.Name = name;
-            newRelay.ID = _relayIds++;
-            await AddRelayAsync(newRelay);
-            return newRelay;
-        }
-
-        public async Task<bool> AddRelayAsync(Relay relay)
-        {
-            //if (relay.ID == 0) throw new Exception("No valid Relay ID");
-            if (relay.Name.Length == 0) throw new Exception("No valid Relay Name");
-            if (relays.Where(r => r.ID == relay.ID).Count() > 0)
-            {
-                return false;
-            }
-            relays.Add(relay);
-
+            var topic = arg.ApplicationMessage.Topic;
             using (var db = new DataContext())
             {
-                try
+                // look for a Relay in the database that is subscribed to the received topic
+                foreach (var relay in db.Relays.ToArray().Where(r => r.Topic == topic))
                 {
-                    db.Relays.Add(relay);
-                    await db.SaveChangesAsync();
+                    if (arg.ApplicationMessage.Payload.Length > 0)
+                    {
+                        relay.IsOn = (Encoding.ASCII.GetString(arg.ApplicationMessage.Payload) == relay.OnCommand);
+                        relay.LastUpdated = DateTime.Now;
+                        db.Relays.Update(relay);
+
+                        db.InfoLogs.Add(new InfoLog(DateTime.Now, relay.ID, "Relay", relay.Name, "switch", relay.IsOn.ToString(), "RelayCollection"));
+                    }
                 }
-                catch (Exception ex)
-                {
-
-                }
-            }
-            return true;
-        }
-
-        public Relay GetRelay(int id)
-        {
-            var ret = relays.Find(r => r.ID == id);
-            return ret;
-        }
-
-        public Relay GetRelay(string name)
-        {
-            var ret = relays.Find(r => r.Name == name);
-            return ret;
-        }
-
-        public async Task UpdateRelayAsync(Relay relay)
-        {
-            var oldRelay = relays.First(r => r.ID == relay.ID);
-
-            if (oldRelay != null)
-            {
-                using (var db = new DataContext())
-                {
-                    db.Relays.Update(relay);
-                    await db.SaveChangesAsync();
-                }
-                Load();
-            }
-        }
-
-        public async Task DeleteRelayAsync(int id)
-        {
-            var oldRelay = relays.First(r => r.ID == id);
-            if (oldRelay != null)
-            {
-                using (var db = new DataContext())
-                {
-                    db.Relays.Remove(oldRelay);
-                    await db.SaveChangesAsync();
-                }
-                Load();
-            }
+                db.SaveChanges();
+            }        
+            return 0;
         }
     }
 }

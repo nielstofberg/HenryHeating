@@ -1,9 +1,10 @@
-﻿using Heating.Data;
+﻿using Heating.Core.Data;
+using Heating.PubSub;
+using MQTTnet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Heating.Core
 {
@@ -22,99 +23,72 @@ namespace Heating.Core
             }
         }
 
-        public void Load()
+        /// <summary>
+        /// Subscribe to all MqttToppics
+        /// </summary>
+        public void SubscribeToPubSub()
         {
-            sensors.Clear();
+            MyMqttServer.UseMessageReceivedHandler(Handler, "");
+        }
+
+        /// <summary>
+        /// Handle Mqtt Update
+        /// </summary>
+        /// <param name="arg"></param>
+        /// <returns></returns>
+        private int Handler(MqttApplicationMessageReceivedEventArgs arg)
+        {
+            var topic = arg.ApplicationMessage.Topic;
             using (var db = new DataContext())
             {
-                try
+                // look for a Sensor in the database that is subscribed to the received topic
+                foreach (var sensor in db.Sensors.ToArray().Where(s => s.Topic == topic))
                 {
-                    sensors = db.Sensors.ToList();
+                    if (arg.ApplicationMessage.Payload.Length > 0)
+                    {
+                        float val = 0;
+                        bool timeUpdate = false;
+                        // Get the published value and convert it to a float.
+                        if (!float.TryParse(Encoding.ASCII.GetString(arg.ApplicationMessage.Payload), out val))
+                        {
+                            if (arg.ApplicationMessage.Payload.Length == 4)
+                            {
+                                try
+                                {
+                                    val = BitConverter.ToSingle(arg.ApplicationMessage.Payload, 0);
+                                    //LastUpdated = DateTime.Now;
+                                }
+                                catch { }
+                            }
+                        }
+                        // If it hasn't updated in the last 30 minutes, forse update now.
+                        try
+                        {
+                            timeUpdate = (DateTime.Now - sensor.LastUpdated) > new TimeSpan(0, 30, 0);
+                        }
+                        catch
+                        {
+                            timeUpdate = true; // If there is a problem wth the time, update the falues;
+                        }
+
+                        // update if the value changed or time expired.
+                        if (val != sensor.Reading || timeUpdate)
+                        {
+                            sensor.LastUpdated = DateTime.Now;
+                            sensor.Reading = val;
+                            db.Sensors.Update(sensor);
+
+                            var lastlog = db.InfoLogs.Last(s => s.DeviceId == sensor.ID && s.DeviceType == "Sensor");
+                            if (lastlog == null || Math.Abs(float.Parse(lastlog.Value) - sensor.Reading) >= sensor.LogChange)
+                            {
+                                db.InfoLogs.Add(new InfoLog(DateTime.Now, sensor.ID, "Sensor", sensor.Name, "receive", sensor.Reading.ToString("0.00"), "SensorCollection"));
+                            }
+                        }
+                    }
                 }
-                catch (Exception)
-                { }
+                db.SaveChanges();
             }
-            foreach (var s in sensors)
-            {
-                s.Subscribe();
-            }
-        }
-
-        public Sensor[] ToArray()
-        {
-            return sensors.ToArray();
-        }
-
-        public async Task<Sensor> AddSensorAsync(string name, string topic)
-        {
-            Sensor newSensor = new Sensor(topic);
-            newSensor.Name = name;
-            newSensor.ID = -1;
-            await AddSensorAsync(newSensor);
-            return newSensor;
-        }
-
-        public async Task<bool> AddSensorAsync(Sensor sensor)
-        {
-            if (sensor.Name.Length==0) throw new Exception("No valid Sensor Name");
-            if (sensors.Where(r => r.ID == sensor.ID).Count() > 0)
-            {
-                return false;
-            }
-            sensors.Add(sensor);
-            using (var db = new DataContext())
-            {
-                try
-                {
-                    db.Sensors.Add(sensor);
-                    await db.SaveChangesAsync();
-                }
-                catch (Exception ex)
-                {
-
-                }
-            }
-            return true;
-        }
-
-        public Sensor GetSensor(int id)
-        {
-            var ret = sensors.Find(s=> s.ID == id);
-            return ret;
-        }
-
-        public Sensor GetSensor(string name)
-        {
-            var ret = sensors.Find(s => s.Name == name);
-            return ret;
-        }
-
-        public async Task UpdateSensorAsync(Sensor sensor)
-        {
-            var oldSensor = sensors.First(s => s.ID == sensor.ID);
-            if (oldSensor != null)
-            {
-                using (var db = new DataContext())
-                {
-                    db.Sensors.Update(sensor);
-                    await db.SaveChangesAsync();
-                }
-                Load();
-            }
-        }
-
-        public async Task DeleteSensorAsync(int id)
-        {
-            var oldSensor = sensors.First(s => s.ID == id);
-            if (oldSensor != null)
-            {
-                using (var db = new DataContext())
-                {
-                    db.Sensors.Remove(oldSensor);
-                    await db.SaveChangesAsync();
-                }
-                Load();
-            }
+            return 0;
         }
     }
 }

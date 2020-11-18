@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Heating.Core;
-using Heating.Data;
+using Heating.Core.Data;
 
 namespace Heating.Api.Controllers
 {

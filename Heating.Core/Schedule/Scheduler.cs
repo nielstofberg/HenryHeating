@@ -1,4 +1,5 @@
-﻿using Heating.Data;
+﻿using Heating.Core.Data;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -38,15 +39,17 @@ namespace Heating.Core.Schedule
             {
                 var now = DateTime.Now;
                 var dow = getDays(now);
-                var events = dc.ScheduledEvents.Where(t => t.Hour == now.Hour 
+                var events = dc.ScheduledEvents.Include(r=> r.Relay)
+                                                .Where(t => t.Hour == now.Hour 
                                                         && t.Minute == now.Minute 
                                                         && t.LastExe.AddMinutes(1) < now
-                                                        && dow.Contains(t.Day)).ToArray();
+                                                        && dow.Contains(t.Day))                                                        
+                                                .ToArray();
                 if (events != null && events.Count() > 0)
                 {
                     foreach (var se in events)
                     {
-                        OnScheduledEvent?.Invoke(this, new ScheduledEventArgs(se.RelayID, se.Action));
+                        OnScheduledEvent?.Invoke(this, new ScheduledEventArgs(se.Relay, se.Action));
                         if (se.Repeat)
                         {
                             se.LastExe = DateTime.Now;
