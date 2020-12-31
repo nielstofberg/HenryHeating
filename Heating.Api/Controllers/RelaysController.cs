@@ -53,7 +53,7 @@ namespace Heating.Api.Controllers
                 return NotFound();
             }
 
-            await relay.Switch(value);
+            await relay.SwitchAsync(value);
 
             return relay;
         }

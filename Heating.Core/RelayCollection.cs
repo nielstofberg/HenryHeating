@@ -1,4 +1,5 @@
 ﻿using Heating.Core.Data;
+using Heating.Core.PubSub;
 using Heating.PubSub;
 using MQTTnet;
 using System;
@@ -45,15 +46,23 @@ namespace Heating.Core
                 {
                     if (arg.ApplicationMessage.Payload.Length > 0)
                     {
-                        relay.IsOn = (Encoding.ASCII.GetString(arg.ApplicationMessage.Payload) == relay.OnCommand);
-                        relay.LastUpdated = DateTime.Now;
-                        db.Relays.Update(relay);
-
-                        db.InfoLogs.Add(new InfoLog(DateTime.Now, relay.ID, "Relay", relay.Name, "switch", relay.IsOn.ToString(), "RelayCollection"));
+                        string payload = Encoding.ASCII.GetString(arg.ApplicationMessage.Payload).ToLower();
+                        if (payload == Constant.REFRESH)
+                        {
+                            db.InfoLogs.Add(new InfoLog(DateTime.Now, relay.ID, "Relay", relay.Name, "refresh", "Refresh Requested from client", "RelayCollection"));
+                             var t = relay.SwitchAsync(relay.IsOn);
+                        }
+                        else
+                        {
+                            relay.IsOn = (payload == relay.OnCommand);
+                            relay.LastUpdated = DateTime.Now;
+                            db.Relays.Update(relay);
+                            db.InfoLogs.Add(new InfoLog(DateTime.Now, relay.ID, "Relay", relay.Name, "switch", relay.IsOn.ToString(), "RelayCollection"));
+                        }
                     }
                 }
                 db.SaveChanges();
-            }        
+            }
             return 0;
         }
     }

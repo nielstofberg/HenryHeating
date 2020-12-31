@@ -27,7 +27,7 @@ namespace Heating.Core.Data
         public string OffCommand { get; set; } = "0";
 
 
-        public async Task Switch(bool on)
+        public async Task SwitchAsync(bool on)
         {
             string pl = ((on) ? OnCommand : OffCommand);
             await MyMqttServer.Publish(Topic, pl);

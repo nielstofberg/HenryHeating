@@ -33,7 +33,7 @@ namespace Heating.Core
 
         private async void _scheduler_OnScheduledEvent(object sender, ScheduledEventArgs e)
         {
-            await e.Relay.Switch(e.Action);
+            await e.Relay.SwitchAsync(e.Action);
         }
     }
 }
